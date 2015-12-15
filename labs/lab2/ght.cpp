@@ -1,3 +1,4 @@
+#include <cmath>
 #include <opencv2/opencv.hpp>
 #include <opencv2/features2d/features2d.hpp>
 using namespace cv;
@@ -155,14 +156,71 @@ int main(int argc, char* argv[])
 
   for (int matchInd = 0; matchInd < matches.size(); matchInd++)
   {
+	DMatch match = matches[matchInd];
+	KeyPoint imageKeypoint = keypoints1[match.queryIdx];
+	Point2f image_center(center.x, center.y);
+	float image_r = norm(imageKeypoint.pt - image_center);
+	float image_dx = center.x - imageKeypoint.pt.x;
+	float image_dy = center.y - imageKeypoint.pt.y;
+	float image_angle;
+	if (image_dx == 0.f)
+		image_angle = (image_dy > 0.f) ? (float)CV_PI * 0.5f :
+			(float)CV_PI * 1.5f;
+	else
+	{
+		image_angle = atanf(image_dy / image_dx);
+		if (image_dx < 0)
+			image_angle += (float)CV_PI;
+		else if (image_dy < 0)
+			image_angle += 2.0f * (float)CV_PI;
+	}
 
+	KeyPoint sceneKeypoint = keypoints2[match.trainIdx];
+	float delta_a = (sceneKeypoint.angle - imageKeypoint.angle) *
+		(float)CV_PI / 180.0f;
+	float delta_scale = sceneKeypoint.size / imageKeypoint.size;
+	float scene_r = delta_scale * image_r;
+	float scene_angle = delta_a + image_angle;
+	Point2f scene_center(
+			sceneKeypoint.pt.x + scene_r * cos(scene_angle),
+			sceneKeypoint.pt.y + scene_r * sin(scene_angle));
+	int bin_i = (int)(scene_center.x / splitSet);
+	int bin_j = (int)(scene_center.y / splitSet);
+	hgt.at<int>(bin_j, bin_i) += 1;
   }
+
   Point maxP;
   minMaxLoc(hgt, 0, 0, 0, &maxP, Mat());
   Point resultCenter(maxP.x*splitSet, maxP.y*splitSet);
   namedWindow("result", 0);
   drawX(resultCenter, scene);
+
+  vector<Point2f> imageKptPoints, sceneKptPoints;
+  for (auto it = matches.begin(); it != matches.end(); it++)
+  {
+	  imageKptPoints.push_back(keypoints1[it->queryIdx].pt);
+	  sceneKptPoints.push_back(keypoints2[it->trainIdx].pt);
+  }
+  Mat hommat = findHomography(imageKptPoints, sceneKptPoints, CV_RANSAC);
+  vector<Point2f> image_corners;
+  image_corners.push_back(Point2f(0.f, 0.f));
+  image_corners.push_back(Point2f(image.cols, 0.f));
+  image_corners.push_back(Point2f(image.cols, image.rows));
+  image_corners.push_back(Point2f(0.f, image.rows));
+ 
+  vector<Point2f> scene_corners(4);
+  perspectiveTransform(image_corners, scene_corners, hommat);
+
+  for (int i = 0; i < 4; i++)
+  {
+	  Point p1((int)scene_corners[i].x,
+			  (int)scene_corners[i].y);
+	  Point p2((int)scene_corners[(i + 1) % 4].x,
+			  (int)scene_corners[(i + 1) % 4].y);
+	  line(scene, p1, p2, Scalar(0, 255, 255), 2, CV_AA);
+  }
   imshow("result", scene);
   waitKey(0);
+
   return 0;
 }
