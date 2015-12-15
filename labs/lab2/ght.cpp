@@ -162,18 +162,7 @@ int main(int argc, char* argv[])
 	float image_r = norm(imageKeypoint.pt - image_center);
 	float image_dx = center.x - imageKeypoint.pt.x;
 	float image_dy = center.y - imageKeypoint.pt.y;
-	float image_angle;
-	if (image_dx == 0.f)
-		image_angle = (image_dy > 0.f) ? (float)CV_PI * 0.5f :
-			(float)CV_PI * 1.5f;
-	else
-	{
-		image_angle = atanf(image_dy / image_dx);
-		if (image_dx < 0)
-			image_angle += (float)CV_PI;
-		else if (image_dy < 0)
-			image_angle += 2.0f * (float)CV_PI;
-	}
+	float image_angle = atan2(image_dy, image_dx);
 
 	KeyPoint sceneKeypoint = keypoints2[match.trainIdx];
 	float delta_a = (sceneKeypoint.angle - imageKeypoint.angle) *
@@ -195,6 +184,7 @@ int main(int argc, char* argv[])
   namedWindow("result", 0);
   drawX(resultCenter, scene);
 
+  // Draw the outline of the box using the homography
   vector<Point2f> imageKptPoints, sceneKptPoints;
   for (auto it = matches.begin(); it != matches.end(); it++)
   {
